@@ -1,31 +1,61 @@
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#define SHM_KEY 1234
+
+typedef struct {
+    int flanes_rellenados;
+} SharedData;
 
 int main() {
-    // Número de flanes que puede preparar el repostero
-    int total_flanes = 25;
-
-    // Crear proceso para el repostero
-    pid_t pid = fork();
-
-    if (pid == 0) {
-        // Código del repostero
-        printf("Repostero: Rellenando la heladera con flanes...\n");
-        sleep(3);  // Simulación de rellenar la heladera
-
-        exit(0);   // Salir del proceso del repostero
-    } else if (pid < 0) {
-        perror("Error al crear el proceso del repostero");
+    // Obtener la memoria compartida existente
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
+    if (shmid == -1) {
+        perror("Error al obtener la memoria compartida");
         exit(EXIT_FAILURE);
     }
 
-    // Esperar a que el repostero termine
-    wait(NULL);
+    SharedData *shared_data = (SharedData *)shmat(shmid, NULL, 0);
 
-    printf("El repostero ha terminado. La heladera está lista.\n");
+    // Variables
+    int capacidad_heladera = 25;
+    pid_t child_pid;
+
+    // Ciclo de relleno de flanes
+    while (shared_data->flanes_rellenados < 180) {
+        // Verificar la capacidad de la heladera antes de rellenar más flanes
+        if (shared_data->flanes_rellenados % capacidad_heladera == 0) {
+            // Crear un proceso para rellenar más flanes
+            child_pid = fork();
+
+            if (child_pid == -1) {
+                perror("Error al crear el proceso del repostero");
+                exit(EXIT_FAILURE);
+            }
+
+            if (child_pid == 0) {
+                // Código del repostero para rellenar flanes
+                printf("Repostero: Rellenando flanes...\n");
+                shared_data->flanes_rellenados += capacidad_heladera;
+                printf("Repostero: Flanes rellenados: %d\n", shared_data->flanes_rellenados);
+                exit(EXIT_SUCCESS);
+            } else {
+                // Esperar a que el hijo termine antes de continuar
+                wait(NULL);
+            }
+        }
+    }
+
+    // Desvincular y liberar la memoria compartida
+    shmdt(shared_data);
+
+    printf("Repostero: Todos los flanes han sido rellenados. Cierre del programa.\n");
 
     return 0;
 }
+
 

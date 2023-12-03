@@ -1,35 +1,56 @@
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#define SHM_KEY 1234
+
+typedef struct {
+    int platos_retirados;
+} SharedData;
 
 int main() {
-    // Número de mesas y capacidad de la mesada
-    int num_mesas = 33;
-    int capacidad_mesada = 27;
+    // Obtener la memoria compartida existente
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
+    if (shmid == -1) {
+        perror("Error al obtener la memoria compartida");
+        exit(EXIT_FAILURE);
+    }
 
-    // Crear procesos para los mozos
-    for (int i = 0; i < num_mesas; ++i) {
-        pid_t pid = fork();
+    SharedData *shared_data = (SharedData *)shmat(shmid, NULL, 0);
 
-        if (pid == 0) {
-            // Código del mozo
-            printf("Mozo %d: Retirando platos de la mesada para la mesa %d...\n", i + 1, i + 1);
-            sleep(1);  // Simulación de llevar los platos a la mesa
+    // Variables
+    int capacidad_bandeja = 4;
+    pid_t child_pid;
 
-            exit(0);   // Salir del proceso del mozo
-        } else if (pid < 0) {
+    // Ciclo de retiro de platos
+    while (shared_data->platos_retirados < 180) {
+        // Crear un proceso para retirar platos
+        child_pid = fork();
+
+        if (child_pid == -1) {
             perror("Error al crear el proceso del mozo");
             exit(EXIT_FAILURE);
         }
+
+        if (child_pid == 0) {
+            // Código del mozo para retirar platos
+            printf("Mozo: Retirando platos...\n");
+            shared_data->platos_retirados += capacidad_bandeja;
+            printf("Mozo: Platos retirados: %d\n", shared_data->platos_retirados);
+            exit(EXIT_SUCCESS);
+        } else {
+            // Esperar a que el hijo termine antes de continuar
+            wait(NULL);
+        }
     }
 
-    // Esperar a que todos los mozos terminen
-    for (int i = 0; i < num_mesas; ++i) {
-        wait(NULL);
-    }
+    // Desvincular la memoria compartida
+    shmdt(shared_data);
 
-    printf("Todos los mozos han terminado. La cantina se cierra.\n");
+    printf("Mozo: Todos los platos han sido retirados. Cierre del programa.\n");
 
     return 0;
 }
