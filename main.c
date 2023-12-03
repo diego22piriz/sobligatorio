@@ -2,29 +2,76 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#define SHM_KEY 1234
+
+typedef struct {
+    int platos_preparados;
+    int platos_retirados;
+    int flanes_rellenados;
+} SharedData;
+
+void runCocineros() {
+    execlp("./cocineros", "cocineros", NULL);
+}
+
+void runMozos() {
+    execlp("./mozos", "mozos", NULL);
+}
+
+void runRepostero() {
+    execlp("./repostero", "repostero", NULL);
+}
 
 int main() {
-    // Crear un segmento de memoria compartida
-    size_t size = sizeof(int);
-    int *shared_data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
-    if (shared_data == MAP_FAILED) {
+    // Crear e inicializar la memoria compartida
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), IPC_CREAT | 0666);
+    if (shmid == -1) {
         perror("Error al crear la memoria compartida");
         exit(EXIT_FAILURE);
     }
 
-    // Inicializar la memoria compartida (podrías almacenar datos compartidos aquí)
+    SharedData *shared_data = (SharedData *)shmat(shmid, NULL, 0);
+    shared_data->platos_preparados = 0;
+    shared_data->platos_retirados = 0;
+    shared_data->flanes_rellenados = 0;
 
-    // Ejecutar los programas desde la línea de comandos
-    system("./cocineros &");
-    system("./mozos &");
-    system("./repostero &");
+    // Crear procesos para los cocineros, mozos y repostero
+    pid_t cocineros_pid, mozos_pid, repostero_pid;
 
-    // Esperar a que todos los programas terminen
-    wait(NULL);
+    cocineros_pid = fork();
+    if (cocineros_pid == 0) {
+        // Código para los cocineros
+        runCocineros();
+        exit(EXIT_SUCCESS);
+    }
 
-    // Liberar la memoria compartida
-    munmap(shared_data, size);
+    mozos_pid = fork();
+    if (mozos_pid == 0) {
+        // Código para los mozos
+        runMozos();
+        exit(EXIT_SUCCESS);
+    }
+
+    repostero_pid = fork();
+    if (repostero_pid == 0) {
+        // Código para el repostero
+        runRepostero();
+        exit(EXIT_SUCCESS);
+    }
+
+    // Esperar a que todos los procesos hijos finalicen
+    waitpid(cocineros_pid, NULL, 0);
+    waitpid(mozos_pid, NULL, 0);
+    waitpid(repostero_pid, NULL, 0);
+
+    // Desvincular y liberar la memoria compartida
+    shmdt(shared_data);
+    shmctl(shmid, IPC_RMID, NULL);
+
+    printf("Programa principal: Todos los procesos han finalizado. Cierre del programa.\n");
 
     return 0;
 }
