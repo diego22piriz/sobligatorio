@@ -1,13 +1,4 @@
-CC = gcc
-CFLAGS = -Wall
-
-all: main
-
-main: main.c
-	$(CC) $(CFLAGS) main.c -o main
-
-run: all
-	./main
-
-clean:
-	rm -f main cocineros mozos repostero
+gcc cocineros.c -o cocineros
+gcc mozos.c -o mozos
+gcc repostero.c -o repostero
+gcc main.c -o main
