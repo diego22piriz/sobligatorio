@@ -66,7 +66,7 @@ while (shared_data-> platos_preparados < 180){
               
  }
    
-    int valor=0;
+    shared_data-> valor=0;
 
      // Desvincular y liberar la memoria compartida
     shmdt(shared_data);
