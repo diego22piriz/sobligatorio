@@ -1,19 +1,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <semaphore.h>
+#include <fcntl.h>
 
-#define SHM_KEY 1234
+
+#define SHM_KEY 123456
+#define mesadaMAX 27
 
 typedef struct {
-    int flanes_rellenados;
+    int mesada;
+    int heladera;
+    int platos_preparados;
+    int postres_preparados;
+    sem_t sem1;
+    sem_t sem2;
+    int valor;
 } SharedData;
 
 int main() {
-    // Obtener la memoria compartida existente
-    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
+
+     // Esperar hasta obtener la memoria compartida
+  int shmid = shmget(SHM_KEY, sizeof(SharedData), 0777);
     if (shmid == -1) {
         perror("Error al obtener la memoria compartida");
         exit(EXIT_FAILURE);
@@ -21,41 +31,42 @@ int main() {
 
     SharedData *shared_data = (SharedData *)shmat(shmid, NULL, 0);
 
-    // Variables
+    // Variables específicas del cocinero
+    
     int capacidad_heladera = 25;
-    pid_t child_pid;
 
-    // Ciclo de relleno de flanes
-    while (shared_data->flanes_rellenados < 180) {
-        // Verificar la capacidad de la heladera antes de rellenar más flanes
-        if (shared_data->flanes_rellenados % capacidad_heladera == 0) {
-            // Crear un proceso para rellenar más flanes
-            child_pid = fork();
 
-            if (child_pid == -1) {
-                perror("Error al crear el proceso del repostero");
-                exit(EXIT_FAILURE);
-            }
+    // LLenar heladera
 
-            if (child_pid == 0) {
-                // Código del repostero para rellenar flanes
-                printf("Repostero: Rellenando flanes...\n");
-                shared_data->flanes_rellenados += capacidad_heladera;
-                printf("Repostero: Flanes rellenados: %d\n", shared_data->flanes_rellenados);
-                exit(EXIT_SUCCESS);
-            } else {
-                // Esperar a que el hijo termine antes de continuar
-                wait(NULL);
-            }
+do{
+
+    if (shared_data->heladera==0);{
+
+        while (shared_data->heladera < 25){
+        sem_wait(&shared_data->sem2);
+
+            printf("Repostero: Preparando postres...\n");
+            shared_data->heladera += 1;
+            shared_data-> postres_preparados += 1;
+            printf("Capacidad heladera: %d\n", shared_data->heladera);
+            printf("Repostero: Postres preparados: %d\n", shared_data-> postres_preparados);
+            sleep(1);
+            
+        sem_post(&shared_data->sem2);
         }
+
     }
+          
+        
+ } while (shared_data->valor==1);
 
-    // Desvincular y liberar la memoria compartida
+
+     // Desvincular y liberar la memoria compartida
     shmdt(shared_data);
+    shmctl(shmid, IPC_RMID, NULL);
 
-    printf("Repostero: Todos los flanes han sido rellenados. Cierre del programa.\n");
+    printf("Programa terminado\n");
 
     return 0;
+
 }
-
-

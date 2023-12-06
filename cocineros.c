@@ -1,64 +1,79 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <semaphore.h>
+#include <fcntl.h>
 
-#define SHM_KEY 1234
+
+#define SHM_KEY 123456
+#define mesadaMAX 27
 
 typedef struct {
+    int mesada;
+    int heladera;
     int platos_preparados;
+    int postres_preparados;
+    sem_t sem1;
+    sem_t sem2;
+    int valor;
 } SharedData;
 
 int main() {
+
     // Crear e inicializar la memoria compartida
-    int shmid = shmget(SHM_KEY, sizeof(SharedData), IPC_CREAT | 0666);
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), IPC_CREAT | 0777);
     if (shmid == -1) {
         perror("Error al crear la memoria compartida");
         exit(EXIT_FAILURE);
     }
 
-    SharedData *shared_data = (SharedData *)shmat(shmid, NULL, 0);
-    shared_data->platos_preparados = 0;
+     SharedData *shared_data = (SharedData *)shmat(shmid, NULL, 0);
+    
+    shared_data->mesada = 0;
+    shared_data->heladera = 25;
+    shared_data-> platos_preparados = 0;
+    shared_data->postres_preparados=0;
+    shared_data->valor=1;
 
-    // Variables
-    int total_platos = 180;
+    //iniciar semaforos
+    sem_init (&shared_data->sem1, 1, 1);
+    sem_init (&shared_data->sem2, 1, 1);
+    
+
+    // Variables específicas del cocinero
     int capacidad_mesada = 27;
-    pid_t child_pid;
+    
+
 
     // Ciclo de preparación de platos
-    while (shared_data->platos_preparados < total_platos) {
-        // Verificar la capacidad de la mesada antes de preparar más platos
-        if (shared_data->platos_preparados % capacidad_mesada == 0) {
-            // Crear un proceso para preparar más platos
-            child_pid = fork();
 
-            if (child_pid == -1) {
-                perror("Error al crear el proceso del cocinero");
-                exit(EXIT_FAILURE);
-            }
+while (shared_data-> platos_preparados < 180){
 
-            if (child_pid == 0) {
-                // Código del cocinero para preparar platos
-                printf("Cocinero: Preparando platos...\n");
-                shared_data->platos_preparados += capacidad_mesada;
-                printf("Cocinero: Platos preparados: %d\n", shared_data->platos_preparados);
-                exit(EXIT_SUCCESS);
-            } else {
-                // Esperar a que el hijo termine antes de continuar
-                wait(NULL);
-            }
+    while (shared_data->mesada < capacidad_mesada && shared_data-> platos_preparados < 180) {
+       sem_wait(&shared_data->sem1);
+
+            printf("Cocinero: Preparando platos...\n");
+            shared_data->mesada += 1;
+            shared_data-> platos_preparados += 1;
+            printf("Capacidad mesada: %d\n", shared_data->mesada);
+            printf("Cocinero: Platos preparados: %d\n", shared_data-> platos_preparados);
+            sleep(1);
+            
+        sem_post(&shared_data->sem1);
         }
-    }
+              
+ }
+   
+    int valor=0;
 
-    // Desvincular y liberar la memoria compartida
+     // Desvincular y liberar la memoria compartida
     shmdt(shared_data);
     shmctl(shmid, IPC_RMID, NULL);
 
-    printf("Cocinero: Todos los platos han sido preparados. Cierre del programa.\n");
+    printf("Se prepararon 180 platos, cerrando restaurante\n");
 
     return 0;
+
 }
-
-
